@@ -90,6 +90,41 @@ def search_movie(update: Update, context: CallbackContext) -> None:
 
     context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message), name="message_handler")
 
+# Function to set a reminder
+def set_reminder(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Вкажіть назву фільму та дату нагадування у форматі YYYY-MM-DD.")
+
+    def handle_reminder(update: Update, context: CallbackContext) -> None:
+        data = update.message.text.split(' ', 1)
+        if len(data) != 2:
+            update.message.reply_text("Невірний формат. Використовуйте: <назва фільму> <YYYY-MM-DD>")
+            return
+        movie_name, reminder_date = data
+        scheduler.add_job(
+            lambda: update.message.reply_text(f"⏰ Нагадування: перегляньте '{movie_name}'!"),
+            trigger=CronTrigger.from_crontab(f"0 9 {reminder_date}"),
+        )
+        update.message.reply_text(f"Нагадування на '{movie_name}' встановлено на {reminder_date}.")
+        context.bot.remove_handler_by_name("reminder_handler")
+
+    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_reminder), name="reminder_handler")
+
+# Function to remove a movie
+def remove_movie(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Введіть назву фільму для видалення.")
+
+    def handle_remove(update: Update, context: CallbackContext) -> None:
+        movie_name = update.message.text
+        db.remove((User.type == 'movie') & (User.name == movie_name))
+        update.message.reply_text(f"Фільм '{movie_name}' видалено зі списку.")
+        context.bot.remove_handler_by_name("remove_handler")
+
+    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_remove), name="remove_handler")
+
 # Fetch popular movies from Filmix
 def filmix_popular(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -128,6 +163,10 @@ def button_handler(update: Update, context: CallbackContext) -> None:
         list_movies(update, context)
     elif query.data == 'search_movie':
         search_movie(update, context)
+    elif query.data == 'set_reminder':
+        set_reminder(update, context)
+    elif query.data == 'remove_movie':
+        remove_movie(update, context)
     elif query.data == 'filmix_popular':
         filmix_popular(update, context)
 
