@@ -28,7 +28,7 @@ class UserAnalysis(Base):
     improvement = Column(Integer, nullable=False)
     destiny = Column(Integer, nullable=True)
     career = Column(Integer, nullable=True)
-    relationship = Column(Integer, nullable=True)
+    relationship_number = Column(Integer, nullable=True)  # Перейменовано з 'relationship'
     lucky_day = Column(Integer, nullable=True)
     lucky_week = Column(Integer, nullable=True)
     lucky_month = Column(Integer, nullable=True)
