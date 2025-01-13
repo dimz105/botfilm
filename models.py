@@ -1,54 +1,36 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Boolean
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+# bot/models.py
+
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
-# Ініціалізація базового класу
 Base = declarative_base()
 
-# Модель для заявки
-class Request(Base):
-    __tablename__ = 'requests'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    description = Column(Text, nullable=False)
-    address = Column(String, nullable=True)
-    priority = Column(String, nullable=False, default="Звичайний")
-    status = Column(String, nullable=False, default="Нова")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-# Модель для користувачів
 class User(Base):
     __tablename__ = 'users'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True, nullable=False)
-    username = Column(String, nullable=True)
-    name = Column(String, nullable=True)
-    is_admin = Column(Boolean, default=False)
+    language = Column(String, default='uk')
+    analyses = relationship("UserAnalysis", back_populates="user")
 
-# Модель для зв'язку заявок із відповідальними користувачами
-class RequestAssignment(Base):
-    __tablename__ = 'request_assignments'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    request_id = Column(Integer, ForeignKey('requests.id'), nullable=False)
+class UserAnalysis(Base):
+    __tablename__ = 'user_analyses'
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-
-# Модель для коментарів
-class Comment(Base):
-    __tablename__ = 'comments'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    request_id = Column(Integer, ForeignKey('requests.id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    comment_text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-# Ініціалізація бази даних
-def init_db():
-    # Використовується SQLite. Для MySQL або PostgreSQL змініть рядок підключення.
-    engine = create_engine('sqlite:///support_bot.db')
-    Base.metadata.create_all(engine)
-    return engine
-
-# Створення сесії для роботи з базою даних
-engine = init_db()
-Session = sessionmaker(bind=engine)
-session = Session()
+    name = Column(String, nullable=False)
+    dob = Column(String, nullable=False)
+    life_path = Column(Integer, nullable=False)
+    expression = Column(Integer, nullable=False)
+    soul = Column(Integer, nullable=False)
+    personality = Column(Integer, nullable=False)
+    improvement = Column(Integer, nullable=False)
+    destiny = Column(Integer, nullable=True)
+    career = Column(Integer, nullable=True)
+    relationship = Column(Integer, nullable=True)
+    lucky_day = Column(Integer, nullable=True)
+    lucky_week = Column(Integer, nullable=True)
+    lucky_month = Column(Integer, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="analyses")
