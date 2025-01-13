@@ -1,94 +1,171 @@
-# bot/numerology.py
+# bot/bot.py
 
-def calculate_life_path_number(dob):
-    """
-    Розрахунок числа життєвого шляху на основі дати народження.
-    :param dob: дата народження у форматі 'DD-MM-YYYY'
-    :return: число життєвого шляху
-    """
-    digits = [int(char) for char in dob if char.isdigit()]
-    total = sum(digits)
-    while total > 9 and total not in [11, 22, 33]:
-        total = sum(int(d) for d in str(total))
-    return total
+import logging
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import (
+    Updater, 
+    CommandHandler, 
+    MessageHandler, 
+    Filters, 
+    ConversationHandler, 
+    CallbackContext
+)
+from dotenv import load_dotenv
+import os
+from numerology import (
+    calculate_life_path_number,
+    calculate_expression_number,
+    calculate_soul_number,
+    calculate_personality_number,
+    calculate_improvement_number
+)
 
-def calculate_expression_number(name):
-    """
-    Розрахунок числа вираження на основі імені.
-    :param name: повне ім'я користувача
-    :return: число вираження
-    """
-    # Піфагорійська система
-    name = name.upper()
-    char_to_num = {
-        'A':1, 'J':1, 'S':1,
-        'B':2, 'K':2, 'T':2,
-        'C':3, 'L':3, 'U':3,
-        'D':4, 'M':4, 'V':4,
-        'E':5, 'N':5, 'W':5,
-        'F':6, 'O':6, 'X':6,
-        'G':7, 'P':7, 'Y':7,
-        'H':8, 'Q':8, 'Z':8,
-        'I':9, 'R':9
-    }
-    total = 0
-    for char in name:
-        if char in char_to_num:
-            total += char_to_num[char]
-    while total > 9 and total not in [11, 22, 33]:
-        total = sum(int(d) for d in str(total))
-    return total
+# Завантаження змінних середовища
+load_dotenv()
 
-def calculate_soul_number(name):
-    """
-    Розрахунок числа душі на основі голосних в імені.
-    :param name: повне ім'я користувача
-    :return: число душі
-    """
-    # Піфагорійська система
-    name = name.upper()
-    vowels = ['A', 'E', 'I', 'O', 'U', 'Y']
-    char_to_num = {
-        'A':1, 'E':5, 'I':9, 'O':6, 'U':3, 'Y':7,
-    }
-    total = 0
-    for char in name:
-        if char in vowels:
-            total += char_to_num.get(char, 0)
-    while total > 9 and total not in [11, 22, 33]:
-        total = sum(int(d) for d in str(total))
-    return total
+# Отримання токена з змінних середовища
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("Встановіть змінну середовища TELEGRAM_BOT_TOKEN у файлі .env")
 
-def calculate_personality_number(name):
-    """
-    Розрахунок числа особистості на основі приголосних в імені.
-    :param name: повне ім'я користувача
-    :return: число особистості
-    """
-    name = name.upper()
-    vowels = ['A', 'E', 'I', 'O', 'U', 'Y']
-    char_to_num = {
-        'B':2, 'C':3, 'D':4, 'F':6, 'G':7,
-        'H':8, 'J':1, 'K':2, 'L':3, 'M':4,
-        'N':5, 'P':7, 'Q':8, 'R':9, 'S':1,
-        'T':2, 'V':4, 'W':5, 'X':6, 'Z':8
-    }
-    total = 0
-    for char in name:
-        if char not in vowels and char.isalpha():
-            total += char_to_num.get(char, 0)
-    while total > 9 and total not in [11, 22, 33]:
-        total = sum(int(d) for d in str(total))
-    return total
+# Налаштування логування
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-def calculate_improvement_number(life_path, expression):
-    """
-    Розрахунок числа вдосконалення.
-    :param life_path: число життєвого шляху
-    :param expression: число вираження
-    :return: число вдосконалення
-    """
-    total = life_path + expression
-    while total > 9 and total not in [11, 22, 33]:
-        total = sum(int(d) for d in str(total))
-    return total
+# Стани для ConversationHandler
+NAME, DOB = range(2)
+
+def start(update: Update, context: CallbackContext) -> int:
+    """Обробник команди /start"""
+    user = update.message.from_user
+    logger.info("User %s started the conversation.", user.first_name)
+    update.message.reply_text(
+        "Вітаю! Я NumerologyGuruBot. Я допоможу вам дізнатися ваші нумерологічні числа.\n\n"
+        "Щоб почати, введіть своє повне ім'я."
+    )
+    return NAME
+
+def help_command(update: Update, context: CallbackContext) -> None:
+    """Обробник команди /help"""
+    update.message.reply_text(
+        "Доступні команди:\n"
+        "/start - Почати нумерологічний аналіз\n"
+        "/help - Отримати допомогу\n"
+        "/analyze - Провести аналіз (запустити діалог заново)"
+    )
+
+def analyze(update: Update, context: CallbackContext) -> int:
+    """Обробник команди /analyze"""
+    user = update.message.from_user
+    logger.info("User %s initiated analysis.", user.first_name)
+    update.message.reply_text(
+        "Давайте проведемо ваш нумерологічний аналіз.\n\n"
+        "Будь ласка, введіть своє повне ім'я."
+    )
+    return NAME
+
+def name_received(update: Update, context: CallbackContext) -> int:
+    """Обробник отримання імені користувача"""
+    user = update.message.from_user
+    name = update.message.text
+    logger.info("User %s entered name: %s", user.first_name, name)
+    context.user_data['name'] = name
+    update.message.reply_text(
+        "Дякую! Тепер введіть вашу дату народження у форматі DD-MM-YYYY (наприклад, 25-12-1990)."
+    )
+    return DOB
+
+def dob_received(update: Update, context: CallbackContext) -> int:
+    """Обробник отримання дати народження"""
+    user = update.message.from_user
+    dob = update.message.text
+    logger.info("User %s entered DOB: %s", user.first_name, dob)
+    
+    # Перевірка формату дати
+    try:
+        day, month, year = map(int, dob.split('-'))
+        dob_formatted = f"{day:02d}-{month:02d}-{year}"
+    except ValueError:
+        update.message.reply_text(
+            "Неправильний формат дати. Будь ласка, введіть дату народження у форматі DD-MM-YYYY."
+        )
+        return DOB
+    
+    context.user_data['dob'] = dob_formatted
+    
+    # Проведення нумерологічного аналізу
+    name = context.user_data['name']
+    life_path = calculate_life_path_number(dob_formatted)
+    expression = calculate_expression_number(name)
+    soul = calculate_soul_number(name)
+    personality = calculate_personality_number(name)
+    improvement = calculate_improvement_number(life_path, expression)
+    
+    analysis = (
+        f"**Нумерологічний Аналіз**\n\n"
+        f"**Ім'я:** {name}\n"
+        f"**Дата народження:** {dob_formatted}\n\n"
+        f"**Число Життєвого Шляху:** {life_path}\n"
+        f"**Число Вираження:** {expression}\n"
+        f"**Число Душі:** {soul}\n"
+        f"**Число Особистості:** {personality}\n"
+        f"**Число Вдосконалення:** {improvement}\n"
+    )
+    
+    update.message.reply_text(analysis, parse_mode='Markdown')
+    return ConversationHandler.END
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    """Обробник команди /cancel"""
+    user = update.message.from_user
+    logger.info("User %s canceled the conversation.", user.first_name)
+    update.message.reply_text(
+        "Аналіз скасовано. Ви можете розпочати заново за допомогою команди /start.",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+def invalid_input(update: Update, context: CallbackContext) -> int:
+    """Обробник неправильних введень"""
+    update.message.reply_text(
+        "Вибачте, я не зрозумів. Будь ласка, введіть правильні дані."
+    )
+    return
+
+def main() -> None:
+    """Основна функція запуску бота"""
+    updater = Updater(TOKEN, use_context=True)
+    
+    dispatcher = updater.dispatcher
+    
+    # Додання обробника команд /start, /help, /analyze
+    dispatcher.add_handler(CommandHandler("help", help_command))
+    
+    # ConversationHandler для аналізу
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start), CommandHandler('analyze', analyze)],
+        
+        states={
+            NAME: [MessageHandler(Filters.text & ~Filters.command, name_received)],
+            DOB: [MessageHandler(Filters.text & ~Filters.command, dob_received)],
+        },
+        
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    
+    dispatcher.add_handler(conv_handler)
+    
+    # Обробник неочікуваних команд
+    dispatcher.add_handler(MessageHandler(Filters.command, invalid_input))
+    
+    # Запуск бота
+    updater.start_polling()
+    
+    # Зупинка бота при натисканні Ctrl-C
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
