@@ -3,7 +3,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, Filters
 from tinydb import TinyDB, Query
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -46,6 +46,14 @@ def add_movie(update: Update, context: CallbackContext) -> None:
     query.answer()
     query.edit_message_text("Введіть назву фільму, який ви хочете додати.")
 
+    def handle_message(update: Update, context: CallbackContext) -> None:
+        movie_name = update.message.text
+        db.insert({"type": "movie", "name": movie_name})
+        update.message.reply_text(f"Фільм '{movie_name}' додано до списку.")
+        context.bot.remove_handler_by_name("message_handler")
+
+    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message), name="message_handler")
+
 # Function to list movies
 def list_movies(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -63,34 +71,24 @@ def search_movie(update: Update, context: CallbackContext) -> None:
     query.answer()
     query.edit_message_text("Введіть назву фільму для пошуку.")
 
-# Function to rate a movie
-def rate_movie(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Оберіть фільм для оцінювання.")
+    def handle_message(update: Update, context: CallbackContext) -> None:
+        movie_name = update.message.text
+        response = requests.get(
+            f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_name}"
+        )
+        if response.status_code != 200:
+            update.message.reply_text("Не вдалося виконати пошук. Спробуйте пізніше.")
+            return
 
-# Function to set a reminder
-def set_reminder(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Вкажіть назву фільму та дату для нагадування (у форматі YYYY-MM-DD).")
+        results = response.json().get("results", [])
+        if not results:
+            update.message.reply_text("Фільм не знайдено.")
+        else:
+            message = "Результати пошуку:\n" + "\n".join(f"- {movie['title']} ({movie['release_date']})" for movie in results[:5])
+            update.message.reply_text(message)
+        context.bot.remove_handler_by_name("message_handler")
 
-# Function to view history
-def view_history(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    history = db.search(User.type == 'history')
-    if not history:
-        query.edit_message_text("Ваша історія переглядів порожня.")
-    else:
-        message = "Ваша історія переглядів:\n" + "\n".join(f"- {item['name']}" for item in history)
-        query.edit_message_text(message)
-
-# Function to remove a movie
-def remove_movie(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Введіть назву фільму для видалення зі списку.")
+    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message), name="message_handler")
 
 # Fetch popular movies from Filmix
 def filmix_popular(update: Update, context: CallbackContext) -> None:
@@ -118,12 +116,6 @@ def filmix_popular(update: Update, context: CallbackContext) -> None:
 
     query.edit_message_text(message, parse_mode="Markdown")
 
-# Function to show help
-def show_help(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Список доступних команд:\n/start\n/filmix\n/stats\n/addmoderator")
-
 # Button handler
 def button_handler(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -136,47 +128,8 @@ def button_handler(update: Update, context: CallbackContext) -> None:
         list_movies(update, context)
     elif query.data == 'search_movie':
         search_movie(update, context)
-    elif query.data == 'rate_movie':
-        rate_movie(update, context)
-    elif query.data == 'set_reminder':
-        set_reminder(update, context)
-    elif query.data == 'view_history':
-        view_history(update, context)
-    elif query.data == 'remove_movie':
-        remove_movie(update, context)
     elif query.data == 'filmix_popular':
         filmix_popular(update, context)
-    elif query.data == 'help':
-        show_help(update, context)
-
-# Admin-only command to add moderators
-def addmoderator(update: Update, context: CallbackContext) -> None:
-    if update.effective_user.id != ADMIN_ID:
-        update.message.reply_text("Ви не маєте прав адміністратора для цієї команди.")
-        return
-
-    if not context.args:
-        update.message.reply_text("Вкажіть ID користувача для додавання в модератори.")
-        return
-
-    moderator_id = int(context.args[0])
-    db.insert({"user_id": moderator_id, "role": "moderator"})
-    update.message.reply_text(f"Користувача з ID {moderator_id} додано в модератори.")
-
-# Admin-only command to view statistics
-def stats(update: Update, context: CallbackContext) -> None:
-    if update.effective_user.id != ADMIN_ID:
-        update.message.reply_text("Ви не маєте прав адміністратора для цієї команди.")
-        return
-
-    total_users = len({record['user_id'] for record in db.all()})
-    total_movies = len(db.all())
-
-    update.message.reply_text(
-        f"Статистика бота:\n"
-        f"👥 Кількість користувачів: {total_users}\n"
-        f"🎥 Кількість фільмів у базі: {total_movies}"
-    )
 
 # Main function
 def main() -> None:
@@ -192,8 +145,6 @@ def main() -> None:
 
     # Command handlers
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("stats", stats))
-    dispatcher.add_handler(CommandHandler("addmoderator", addmoderator))
     dispatcher.add_handler(CallbackQueryHandler(button_handler))
 
     # Start the bot
