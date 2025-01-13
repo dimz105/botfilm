@@ -1,194 +1,127 @@
-import logging
-import os
-import requests
-from bs4 import BeautifulSoup
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, Filters
-from tinydb import TinyDB, Query
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import Application, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, filters
+from sqlalchemy.orm import sessionmaker
+from models import init_db, Request, User, RequestAssignment, Comment
 
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Ініціалізація бази даних
+engine = init_db()
+Session = sessionmaker(bind=engine)
+session = Session()
 
-# Initialize database
-scheduler = BackgroundScheduler()
-scheduler.start()
-db = TinyDB('movies_db.json')
-User = Query()
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")  # Add your TMDB API key to the environment variables
-ADMIN_ID = 558387  # Telegram ID of the bot administrator
+# Стан для ConversationHandler
+CREATE_REQUEST, ASSIGN_REQUEST, SET_PRIORITY, SET_TYPE, CONFIRM_REQUEST = range(5)
 
-# Define start command
-def start(update: Update, context: CallbackContext) -> None:
-    keyboard = [
-        [InlineKeyboardButton("➕ Додати фільм", callback_data='add_movie')],
-        [InlineKeyboardButton("📜 Списки фільмів", callback_data='list_movies')],
-        [InlineKeyboardButton("🔍 Пошук фільму", callback_data='search_movie')],
-        [InlineKeyboardButton("⭐ Оцінити фільм", callback_data='rate_movie')],
-        [InlineKeyboardButton("⏰ Нагадування", callback_data='set_reminder')],
-        [InlineKeyboardButton("🕒 Історія переглядів", callback_data='view_history')],
-        [InlineKeyboardButton("❌ Видалити фільм", callback_data='remove_movie')],
-        [InlineKeyboardButton("🎬 Популярне на Filmix", callback_data='filmix_popular')],
-        [InlineKeyboardButton("ℹ️ Допомога", callback_data='help')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+# Команда /start
+async def start(update: Update, context: CallbackContext):
+    user = update.effective_user
+    if not session.query(User).filter_by(telegram_id=user.id).first():
+        session.add(User(telegram_id=user.id, username=user.username, name=user.full_name))
+        session.commit()
+    await update.message.reply_text("Привіт! Я бот для технічної підтримки. Введіть /help для списку команд.")
 
-    update.message.reply_text(
-        "Привіт! Я бот для управління твоїми списками фільмів. Обери дію з меню:",
-        reply_markup=reply_markup
+# Команда /help
+async def help_command(update: Update, context: CallbackContext):
+    commands = (
+        "/create_request - Створити нову заявку\n"
+        "/assign - Призначити відповідальних\n"
+        "/set_status - Змінити статус заявки\n"
+        "/request_info - Переглянути інформацію про заявку\n"
+        "/comment - Додати коментар до заявки\n"
+        "/list_requests - Переглянути всі заявки\n"
+        "/reports - Отримати звіт про заявки"
     )
+    await update.message.reply_text(f"Доступні команди:\n{commands}")
 
-# Function to add a movie
-def add_movie(update: Update, context: CallbackContext) -> None:
+# Команда /create_request
+async def create_request(update: Update, context: CallbackContext):
+    keyboard = [
+        [InlineKeyboardButton("Немає інтернету", callback_data="no_internet"),
+         InlineKeyboardButton("Проблеми з Wi-Fi", callback_data="wifi_issues")],
+        [InlineKeyboardButton("Пошкодження кабелю", callback_data="cable_damage")]
+    ]
+    await update.message.reply_text(
+        "Оберіть тип проблеми:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return SET_TYPE
+
+async def set_type(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()
-    query.edit_message_text("Введіть назву фільму, який ви хочете додати.")
+    await query.answer()
+    context.user_data['type'] = query.data
 
-    def handle_message(update: Update, context: CallbackContext) -> None:
-        movie_name = update.message.text
-        db.insert({"type": "movie", "name": movie_name})
-        update.message.reply_text(f"Фільм '{movie_name}' додано до списку.")
-        context.bot.remove_handler_by_name("message_handler")
+    keyboard = [
+        [InlineKeyboardButton("Терміновий", callback_data="urgent"),
+         InlineKeyboardButton("Високий", callback_data="high")],
+        [InlineKeyboardButton("Звичайний", callback_data="normal"),
+         InlineKeyboardButton("Низький", callback_data="low")]
+    ]
+    await query.edit_message_text(
+        "Оберіть пріоритет:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return SET_PRIORITY
 
-    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message), name="message_handler")
-
-# Function to list movies
-def list_movies(update: Update, context: CallbackContext) -> None:
+async def set_priority(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()
-    movies = db.search(User.type == 'movie')
-    if not movies:
-        query.edit_message_text("Ваш список фільмів порожній.")
-    else:
-        message = "Ваш список фільмів:\n" + "\n".join(f"- {movie['name']}" for movie in movies)
-        query.edit_message_text(message)
+    await query.answer()
+    context.user_data['priority'] = query.data
 
-# Function to search for a movie
-def search_movie(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Введіть назву фільму для пошуку.")
+    await query.edit_message_text("Введіть опис проблеми:")
+    return CREATE_REQUEST
 
-    def handle_message(update: Update, context: CallbackContext) -> None:
-        movie_name = update.message.text
-        response = requests.get(
-            f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_name}"
-        )
-        if response.status_code != 200:
-            update.message.reply_text("Не вдалося виконати пошук. Спробуйте пізніше.")
-            return
+async def save_request(update: Update, context: CallbackContext):
+    description = update.message.text
+    context.user_data['description'] = description
 
-        results = response.json().get("results", [])
-        if not results:
-            update.message.reply_text("Фільм не знайдено.")
-        else:
-            message = "Результати пошуку:\n" + "\n".join(f"- {movie['title']} ({movie['release_date']})" for movie in results[:5])
-            update.message.reply_text(message)
-        context.bot.remove_handler_by_name("message_handler")
+    new_request = Request(
+        description=context.user_data['description'],
+        address="Не вказано",
+        priority=context.user_data['priority'],
+        status="Нова"
+    )
+    session.add(new_request)
+    session.commit()
 
-    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message), name="message_handler")
+    await update.message.reply_text(
+        f"Заявку створено з ID {new_request.id}. Тип: {context.user_data['type']}, Пріоритет: {context.user_data['priority']}"
+    )
+    return ConversationHandler.END
 
-# Function to set a reminder
-def set_reminder(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Вкажіть назву фільму та дату нагадування у форматі YYYY-MM-DD.")
+# Команда /reports
+async def reports(update: Update, context: CallbackContext):
+    total_requests = session.query(Request).count()
+    completed_requests = session.query(Request).filter_by(status="Виконано").count()
+    in_progress_requests = session.query(Request).filter_by(status="В роботі").count()
 
-    def handle_reminder(update: Update, context: CallbackContext) -> None:
-        data = update.message.text.split(' ', 1)
-        if len(data) != 2:
-            update.message.reply_text("Невірний формат. Використовуйте: <назва фільму> <YYYY-MM-DD>")
-            return
-        movie_name, reminder_date = data
-        scheduler.add_job(
-            lambda: update.message.reply_text(f"⏰ Нагадування: перегляньте '{movie_name}'!"),
-            trigger=CronTrigger.from_crontab(f"0 9 {reminder_date}"),
-        )
-        update.message.reply_text(f"Нагадування на '{movie_name}' встановлено на {reminder_date}.")
-        context.bot.remove_handler_by_name("reminder_handler")
+    types_stats = session.query(Request).with_entities(Request.description, func.count(Request.id)).group_by(Request.description).all()
 
-    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_reminder), name="reminder_handler")
+    types_report = "\n".join([f"{t[0]}: {t[1]}" for t in types_stats])
 
-# Function to remove a movie
-def remove_movie(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    query.edit_message_text("Введіть назву фільму для видалення.")
+    report = (
+        f"Загальна кількість заявок: {total_requests}\n"
+        f"Виконано: {completed_requests}\n"
+        f"В роботі: {in_progress_requests}\n"
+        f"Типи заявок:\n{types_report}"
+    )
+    await update.message.reply_text(report)
 
-    def handle_remove(update: Update, context: CallbackContext) -> None:
-        movie_name = update.message.text
-        db.remove((User.type == 'movie') & (User.name == movie_name))
-        update.message.reply_text(f"Фільм '{movie_name}' видалено зі списку.")
-        context.bot.remove_handler_by_name("remove_handler")
+# Основний блок для запуску бота
+application = Application.builder().token("YOUR_TELEGRAM_BOT_TOKEN").build()
 
-    context.bot.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_remove), name="remove_handler")
+# Реєстрація хендлерів
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(ConversationHandler(
+    entry_points=[CommandHandler("create_request", create_request)],
+    states={
+        SET_TYPE: [CallbackQueryHandler(set_type)],
+        SET_PRIORITY: [CallbackQueryHandler(set_priority)],
+        CREATE_REQUEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_request)]
+    },
+    fallbacks=[]
+))
+application.add_handler(CommandHandler("reports", reports))
 
-# Fetch popular movies from Filmix
-def filmix_popular(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-
-    url = "https://filmix.my/popular/"
-    response = requests.get(url)
-    if response.status_code != 200:
-        query.edit_message_text("Не вдалося отримати популярні фільми з Filmix. Спробуйте пізніше.")
-        return
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-    movies = soup.find_all('div', class_='shortstory')[:5]
-
-    if not movies:
-        query.edit_message_text("Не знайдено популярних фільмів на Filmix.")
-        return
-
-    message = "🎬 Популярні фільми на Filmix:\n"
-    for movie in movies:
-        title = movie.find('a', class_='shortstory__title').text.strip()
-        link = movie.find('a', class_='shortstory__title')['href']
-        message += f"- [{title}]({link})\n"
-
-    query.edit_message_text(message, parse_mode="Markdown")
-
-# Button handler
-def button_handler(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()  # Acknowledge the callback
-
-    # Actions based on callback_data
-    if query.data == 'add_movie':
-        add_movie(update, context)
-    elif query.data == 'list_movies':
-        list_movies(update, context)
-    elif query.data == 'search_movie':
-        search_movie(update, context)
-    elif query.data == 'set_reminder':
-        set_reminder(update, context)
-    elif query.data == 'remove_movie':
-        remove_movie(update, context)
-    elif query.data == 'filmix_popular':
-        filmix_popular(update, context)
-
-# Main function
-def main() -> None:
-    # Check TELEGRAM_BOT_TOKEN
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    if not token:
-        raise ValueError("TELEGRAM_BOT_TOKEN не встановлено. Додайте токен у змінні середовища.")
-
-    # Initialize bot
-    updater = Updater(token)
-
-    dispatcher = updater.dispatcher
-
-    # Command handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CallbackQueryHandler(button_handler))
-
-    # Start the bot
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    application.run_polling()
