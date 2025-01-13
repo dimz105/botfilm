@@ -65,6 +65,31 @@ def filmix_popular(update: Update, context: CallbackContext) -> None:
 
     update.message.reply_text(message, parse_mode="Markdown")
 
+# Button handler
+def button_handler(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()  # Acknowledge the callback
+
+    # Actions based on callback_data
+    if query.data == 'add_movie':
+        query.edit_message_text(text="Функція додавання фільму ще не реалізована.")
+    elif query.data == 'list_movies':
+        query.edit_message_text(text="Список ваших фільмів порожній.")
+    elif query.data == 'search_movie':
+        query.edit_message_text(text="Функція пошуку фільму ще не реалізована.")
+    elif query.data == 'rate_movie':
+        query.edit_message_text(text="Функція оцінки фільму ще не реалізована.")
+    elif query.data == 'set_reminder':
+        query.edit_message_text(text="Функція встановлення нагадування ще не реалізована.")
+    elif query.data == 'view_history':
+        query.edit_message_text(text="Історія переглядів порожня.")
+    elif query.data == 'remove_movie':
+        query.edit_message_text(text="Функція видалення фільму ще не реалізована.")
+    elif query.data == 'filmix_popular':
+        filmix_popular(update, context)  # Call the function for popular movies
+    elif query.data == 'help':
+        query.edit_message_text(text="Список доступних команд:\n/start\n/filmix\n/stats\n/addmoderator")
+
 # Admin-only command to add moderators
 def addmoderator(update: Update, context: CallbackContext) -> None:
     if update.effective_user.id != ADMIN_ID:
@@ -111,6 +136,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("filmix", filmix_popular))
     dispatcher.add_handler(CommandHandler("stats", stats))
     dispatcher.add_handler(CommandHandler("addmoderator", addmoderator))
+    dispatcher.add_handler(CallbackQueryHandler(button_handler))  # Added button handler
 
     # Start the bot
     updater.start_polling()
