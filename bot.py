@@ -3,12 +3,10 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
 from tinydb import TinyDB, Query
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from pytube import YouTube
-from random import choice
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -20,7 +18,7 @@ scheduler.start()
 db = TinyDB('movies_db.json')
 User = Query()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")  # Add your TMDB API key to the environment variables
-ADMIN_ID = int(os.getenv("558387", "0"))  # Telegram ID of the bot administrator, default 0 if not set
+ADMIN_ID = 558387  # Telegram ID of the bot administrator
 
 # Define start command
 def start(update: Update, context: CallbackContext) -> None:
@@ -42,19 +40,74 @@ def start(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
 
+# Function to add a movie
+def add_movie(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Введіть назву фільму, який ви хочете додати.")
+
+# Function to list movies
+def list_movies(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    movies = db.search(User.type == 'movie')
+    if not movies:
+        query.edit_message_text("Ваш список фільмів порожній.")
+    else:
+        message = "Ваш список фільмів:\n" + "\n".join(f"- {movie['name']}" for movie in movies)
+        query.edit_message_text(message)
+
+# Function to search for a movie
+def search_movie(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Введіть назву фільму для пошуку.")
+
+# Function to rate a movie
+def rate_movie(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Оберіть фільм для оцінювання.")
+
+# Function to set a reminder
+def set_reminder(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Вкажіть назву фільму та дату для нагадування (у форматі YYYY-MM-DD).")
+
+# Function to view history
+def view_history(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    history = db.search(User.type == 'history')
+    if not history:
+        query.edit_message_text("Ваша історія переглядів порожня.")
+    else:
+        message = "Ваша історія переглядів:\n" + "\n".join(f"- {item['name']}" for item in history)
+        query.edit_message_text(message)
+
+# Function to remove a movie
+def remove_movie(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Введіть назву фільму для видалення зі списку.")
+
 # Fetch popular movies from Filmix
 def filmix_popular(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
     url = "https://filmix.my/popular/"
     response = requests.get(url)
     if response.status_code != 200:
-        update.message.reply_text("Не вдалося отримати популярні фільми з Filmix. Спробуйте пізніше.")
+        query.edit_message_text("Не вдалося отримати популярні фільми з Filmix. Спробуйте пізніше.")
         return
 
     soup = BeautifulSoup(response.text, 'html.parser')
     movies = soup.find_all('div', class_='shortstory')[:5]
 
     if not movies:
-        update.message.reply_text("Не знайдено популярних фільмів на Filmix.")
+        query.edit_message_text("Не знайдено популярних фільмів на Filmix.")
         return
 
     message = "🎬 Популярні фільми на Filmix:\n"
@@ -63,7 +116,13 @@ def filmix_popular(update: Update, context: CallbackContext) -> None:
         link = movie.find('a', class_='shortstory__title')['href']
         message += f"- [{title}]({link})\n"
 
-    update.message.reply_text(message, parse_mode="Markdown")
+    query.edit_message_text(message, parse_mode="Markdown")
+
+# Function to show help
+def show_help(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text("Список доступних команд:\n/start\n/filmix\n/stats\n/addmoderator")
 
 # Button handler
 def button_handler(update: Update, context: CallbackContext) -> None:
@@ -72,23 +131,23 @@ def button_handler(update: Update, context: CallbackContext) -> None:
 
     # Actions based on callback_data
     if query.data == 'add_movie':
-        query.edit_message_text(text="Функція додавання фільму ще не реалізована.")
+        add_movie(update, context)
     elif query.data == 'list_movies':
-        query.edit_message_text(text="Список ваших фільмів порожній.")
+        list_movies(update, context)
     elif query.data == 'search_movie':
-        query.edit_message_text(text="Функція пошуку фільму ще не реалізована.")
+        search_movie(update, context)
     elif query.data == 'rate_movie':
-        query.edit_message_text(text="Функція оцінки фільму ще не реалізована.")
+        rate_movie(update, context)
     elif query.data == 'set_reminder':
-        query.edit_message_text(text="Функція встановлення нагадування ще не реалізована.")
+        set_reminder(update, context)
     elif query.data == 'view_history':
-        query.edit_message_text(text="Історія переглядів порожня.")
+        view_history(update, context)
     elif query.data == 'remove_movie':
-        query.edit_message_text(text="Функція видалення фільму ще не реалізована.")
+        remove_movie(update, context)
     elif query.data == 'filmix_popular':
-        filmix_popular(update, context)  # Call the function for popular movies
+        filmix_popular(update, context)
     elif query.data == 'help':
-        query.edit_message_text(text="Список доступних команд:\n/start\n/filmix\n/stats\n/addmoderator")
+        show_help(update, context)
 
 # Admin-only command to add moderators
 def addmoderator(update: Update, context: CallbackContext) -> None:
@@ -133,10 +192,9 @@ def main() -> None:
 
     # Command handlers
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("filmix", filmix_popular))
     dispatcher.add_handler(CommandHandler("stats", stats))
     dispatcher.add_handler(CommandHandler("addmoderator", addmoderator))
-    dispatcher.add_handler(CallbackQueryHandler(button_handler))  # Added button handler
+    dispatcher.add_handler(CallbackQueryHandler(button_handler))
 
     # Start the bot
     updater.start_polling()
