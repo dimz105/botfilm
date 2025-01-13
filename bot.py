@@ -97,7 +97,7 @@ def stats(update: Update, context: CallbackContext) -> None:
 # Main function
 def main() -> None:
     # Check TELEGRAM_BOT_TOKEN
-    token = os.getenv("6697994818:AAFpuSW8uhWHms8OUpJ3no9L_-F8wdCZdF0")
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise ValueError("TELEGRAM_BOT_TOKEN не встановлено. Додайте токен у змінні середовища.")
 
