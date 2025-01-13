@@ -20,7 +20,7 @@ scheduler.start()
 db = TinyDB('movies_db.json')
 User = Query()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")  # Add your TMDB API key to the environment variables
-ADMIN_ID = int(os.getenv("ADMIN_ID"))  # Telegram ID of the bot administrator
+ADMIN_ID = int(os.getenv("558387"))  # Telegram ID of the bot administrator
 
 # Define start command
 def start(update: Update, context: CallbackContext) -> None:
@@ -97,7 +97,7 @@ def stats(update: Update, context: CallbackContext) -> None:
 # Main function
 def main() -> None:
     # Initialize bot
-    updater = Updater(os.getenv("TELEGRAM_BOT_TOKEN"))
+    updater = Updater(os.getenv("6697994818:AAFpuSW8uhWHms8OUpJ3no9L_-F8wdCZdF0"))
 
     dispatcher = updater.dispatcher
 
