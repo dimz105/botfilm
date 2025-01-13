@@ -92,3 +92,66 @@ def calculate_improvement_number(life_path, expression):
     while total > 9 and total not in [11, 22, 33]:
         total = sum(int(d) for d in str(total))
     return total
+
+def calculate_destiny_number(life_path, expression):
+    """
+    Розрахунок числа долі.
+    :param life_path: число життєвого шляху
+    :param expression: число вираження
+    :return: число долі
+    """
+    total = life_path + expression
+    while total > 9 and total not in [11, 22, 33]:
+        total = sum(int(d) for d in str(total))
+    return total
+
+def calculate_career_number(expression, destiny):
+    """
+    Розрахунок числа кар'єри.
+    :param expression: число вираження
+    :param destiny: число долі
+    :return: число кар'єри
+    """
+    total = expression + destiny
+    while total > 9 and total not in [11, 22, 33]:
+        total = sum(int(d) for d in str(total))
+    return total
+
+def calculate_relationship_number(user_number, partner_number):
+    """
+    Розрахунок числа сумісності між користувачем та партнером.
+    :param user_number: число користувача
+    :param partner_number: число партнера
+    :return: число сумісності
+    """
+    total = user_number + partner_number
+    while total > 9 and total not in [11, 22, 33]:
+        total = sum(int(d) for d in str(total))
+    return total
+
+def calculate_lucky_number(user_data, period='day'):
+    """
+    Розрахунок щасливого числа для користувача.
+    :param user_data: словник з даними користувача
+    :param period: період (day, week, month)
+    :return: щасливе число
+    """
+    import datetime
+    life_path = user_data.get('life_path', 0)
+    expression = user_data.get('expression', 0)
+    
+    if period == 'day':
+        today = datetime.datetime.now().day
+        total = life_path + expression + today
+    elif period == 'week':
+        week_number = datetime.datetime.now().isocalendar()[1]
+        total = life_path + expression + week_number
+    elif period == 'month':
+        month = datetime.datetime.now().month
+        total = life_path + expression + month
+    else:
+        total = life_path + expression
+    
+    while total > 9 and total not in [11, 22, 33]:
+        total = sum(int(d) for d in str(total))
+    return total if total != 0 else 9
