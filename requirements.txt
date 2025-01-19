@@ -1,5 +1,2 @@
-python-telegram-bot==13.15
-Flask==2.3.2
-python-dotenv==1.0.0
-SQLAlchemy==2.0.20
-APScheduler==3.6.3
+discord.py
+sqlite3
