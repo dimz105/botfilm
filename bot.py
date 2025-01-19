@@ -1,11 +1,10 @@
 import discord
 from discord.ext import commands
-from discord.ui import Button, View, Modal, InputText
+from discord.ui import Button, View
 import sqlite3
-import os
-from PIL import Image
-import io
 import requests
+import io
+from PIL import Image
 
 # Налаштування бота
 intents = discord.Intents.default()
@@ -37,13 +36,11 @@ class MovieButtons(View):
 
     @discord.ui.button(label="Додати фільм", style=discord.ButtonStyle.primary)
     async def add_movie_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Створюємо форму для додавання фільму
-        await interaction.response.send_message(f"{interaction.user.mention}, будь ласка, введіть назву фільму та інші деталі!", ephemeral=True)
+        await interaction.response.send_message(f"{interaction.user.mention}, будь ласка, введіть назву фільму та інші деталі.", ephemeral=True)
         await interaction.user.send("Щоб додати фільм, надішліть мені текстові деталі.")
 
     @discord.ui.button(label="Переглянути фільми", style=discord.ButtonStyle.success)
     async def my_movies_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Отримуємо список фільмів користувача
         user_id = interaction.user.id
         conn = sqlite3.connect('movies.db')
         c = conn.cursor()
