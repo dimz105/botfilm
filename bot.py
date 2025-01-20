@@ -44,8 +44,8 @@ class MovieButtons(View):
 
     @discord.ui.button(label="Додати фільм", style=discord.ButtonStyle.primary)
     async def add_movie_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"{interaction.user.mention}, будь ласка, введіть назву фільму та інші деталі.", ephemeral=True)
-        await interaction.user.send("Щоб додати фільм, надішліть мені текстові деталі.")
+        await interaction.response.send_message(f"{interaction.user.mention}, будь ласка, введіть назву фільму.", ephemeral=True)
+        await interaction.user.send("Щоб додати фільм, надішліть мені назву фільму.")
 
     @discord.ui.button(label="Переглянути фільми", style=discord.ButtonStyle.success)
     async def my_movies_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -71,32 +71,71 @@ async def movie_menu(ctx):
     view = MovieButtons(ctx.author.id)
     await ctx.send("Виберіть одну з опцій:", view=view)
 
-# Створення функції для додавання фільму
+# Функція для додавання фільму
 @bot.command()
-async def add_movie(ctx, title: str, status: str, rating: int, genre: str, description: str, release_year: int):
-    # Отримання зображення (постера) через URL
-    await ctx.send("Будь ласка, надішліть постер фільму (URL зображення).")
+async def add_movie(ctx):
+    await ctx.send("Будь ласка, введіть назву фільму.")
     
-    # Очікуємо на відповідь з постером
     def check(msg):
-        return msg.author == ctx.author and msg.attachments
+        return msg.author == ctx.author
 
     msg = await bot.wait_for('message', check=check)
+    title = msg.content
+
+    # Перевірка, чи фільм уже є в базі
+    conn = sqlite3.connect('movies.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM movies WHERE title = ? AND user_id = ?", (title, ctx.author.id))
+    existing_movie = c.fetchone()
     
-    # Завантажуємо постер
+    if existing_movie:
+        await ctx.send("Цей фільм уже є в базі даних. Ви хочете оновити інформацію? (Так/Ні)")
+        msg = await bot.wait_for('message', check=check)
+        if msg.content.lower() != "так":
+            await ctx.send("Операція скасована.")
+            return
+    
+    await ctx.send("Будь ласка, введіть статус фільму (наприклад, 'Подивився', 'Хочу подивитися').")
+    status_msg = await bot.wait_for('message', check=check)
+    status = status_msg.content
+    
+    await ctx.send("Будь ласка, введіть оцінку фільму (від 1 до 10).")
+    rating_msg = await bot.wait_for('message', check=check)
+    rating = int(rating_msg.content)
+    
+    await ctx.send("Будь ласка, введіть жанр фільму (наприклад, 'Драма', 'Бойовик').")
+    genre_msg = await bot.wait_for('message', check=check)
+    genre = genre_msg.content
+    
+    await ctx.send("Будь ласка, введіть опис фільму.")
+    description_msg = await bot.wait_for('message', check=check)
+    description = description_msg.content
+    
+    await ctx.send("Будь ласка, введіть рік випуску фільму.")
+    release_year_msg = await bot.wait_for('message', check=check)
+    release_year = int(release_year_msg.content)
+    
+    await ctx.send("Будь ласка, надішліть постер фільму (URL зображення).")
+    def check_img(msg):
+        return msg.author == ctx.author and msg.attachments
+
+    msg = await bot.wait_for('message', check=check_img)
     poster_url = msg.attachments[0].url
     response = requests.get(poster_url)
     img = Image.open(io.BytesIO(response.content))
     img_byte_array = io.BytesIO()
     img.save(img_byte_array, format='PNG')
     img_byte_array.seek(0)
-    
+
     # Зберігаємо фільм в базу даних
     user_id = ctx.author.id
-    conn = sqlite3.connect('movies.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO movies (title, status, rating, genre, description, release_year, poster, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
-              (title, status, rating, genre, description, release_year, img_byte_array.read(), user_id))
+    if existing_movie:
+        c.execute("UPDATE movies SET status = ?, rating = ?, genre = ?, description = ?, release_year = ?, poster = ? WHERE title = ? AND user_id = ?", 
+                  (status, rating, genre, description, release_year, img_byte_array.read(), title, user_id))
+    else:
+        c.execute("INSERT INTO movies (title, status, rating, genre, description, release_year, poster, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                  (title, status, rating, genre, description, release_year, img_byte_array.read(), user_id))
+    
     conn.commit()
     conn.close()
 
