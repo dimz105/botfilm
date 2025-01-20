@@ -2,9 +2,17 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import sqlite3
+import os
 import requests
 import io
+from dotenv import load_dotenv
 from PIL import Image
+
+# Завантаження змінних середовища з .env файлу (якщо є)
+load_dotenv()
+
+# Отримуємо токен з середовища
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Налаштування бота
 intents = discord.Intents.default()
@@ -96,4 +104,4 @@ async def add_movie(ctx, title: str, status: str, rating: int, genre: str, descr
 
 # Запуск бота
 setup_db()
-bot.run('YOUR_BOT_TOKEN')
+bot.run(DISCORD_TOKEN)
